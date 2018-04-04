@@ -3,15 +3,17 @@
 #include <osg/Material>
 #include <osg/StateSet>
 #include <osg/Light>
+#include <osgUtil/SmoothingVisitor>
 #include <osg/LightSource>
 #include <osg/PositionAttitudeTransform>
 #include <osgViewer/Viewer>
 #include <osgGA/TrackballManipulator>
 #include <parse_stl.h>
 #include <iostream>
-#include <osgDB/ReadFile>
+//#include <osgDB/ReadFile>
 
 using namespace osg;
+PositionAttitudeTransform *lightTransform = new PositionAttitudeTransform();
 //int uniqueLightNumber = 0;
 //int const LIGHTS = 3;
 
@@ -26,8 +28,8 @@ Geode *createMesh(std::vector<stl::triangle> triangles) {
     float maxY = 0;
     float maxZ = 0;
     for (stl::triangle t : triangles){
-        stl::point normal = t.normal;
-        normalArray->push_back(Vec3(normal.x,normal.y,normal.z));
+        //stl::point normal = t.normal;
+        //normalArray->push_back(Vec3(normal.x,normal.y,normal.z));
         //normalArray->push_back(Vec3(1.0,0.0,0.0));
         
         stl::point v1 = t.v1;
@@ -51,9 +53,11 @@ Geode *createMesh(std::vector<stl::triangle> triangles) {
     
     Geometry *geometry = new Geometry();
     geometry->setVertexArray(vertexArray);
-    geometry->setNormalArray(normalArray);
-    geometry->setNormalBinding(Geometry::BIND_PER_PRIMITIVE_SET);
     geometry->addPrimitiveSet(faceArray);
+    osgUtil::SmoothingVisitor::smooth(*geometry);
+    //geometry->setNormalArray(normalArray);
+    //geometry->setNormalBinding(Geometry::BIND_PER_PRIMITIVE_SET);
+
 
     Geode *mesh = new Geode();
     mesh->addDrawable(geometry);
@@ -66,7 +70,7 @@ Node *startup(auto triangles) {
     Geode *mesh = createMesh(triangles);
     
     //This loader should work but the plugin seems messed up currently (3rd party lib needed))
-    //osg::Node *mesh = osgDB::readNodeFile("./DV.obj");
+    //osg::Node *mesh = osgDB::readNodeFile("./cow-nonormals.obj");
 
     PositionAttitudeTransform *meshTransform = new PositionAttitudeTransform();
     meshTransform->addChild(mesh);
@@ -74,7 +78,8 @@ Node *startup(auto triangles) {
 
     // create a white material
     Material *material = new Material();
-    material->setDiffuse(Material::Face::FRONT,  Vec4(1.0, 0.5, 0.1, 1.0));
+    //Control the color
+    material->setDiffuse(Material::Face::FRONT,  Vec4(0.31, 0.31, 0.31, 0.9));
     material->setSpecular(Material::Face::FRONT, Vec4(1.0, 1.0, 1.0, 1.0));
     //material->setAmbient(Material::FRONT,  Vec4(0.1, 0.1, 0.1, 1.0));
     //material->setEmission(Material::FRONT, Vec4(0.0, 0.0, 0.0, .01));
@@ -94,22 +99,27 @@ Node *startup(auto triangles) {
     // Create a white spot light
     osg::ref_ptr<osg::Light> light0 = new osg::Light;
     light0->setLightNum( 0 ); //0-7, default is 0
-    light0->setPosition( osg::Vec4( 400, 400, 400, 1.0 ));
+    light0->setPosition( osg::Vec4( 0, 0, 0, 1.0 ));
+    //light0->setDiffuse(Vec4(0.19, 0.08, 0.08, 0.9));
+    //light0->setSpecular(Vec4(1.0, 1.0, 1.0, 1.0));
     light0->setConstantAttenuation(1.0f);
     
     // create a light source object and add the light to it
     osg::ref_ptr<osg::LightSource> source0 = new osg::LightSource;
     source0->setLight( light0 );
-    scene->addChild(source0);
+    lightTransform->addChild(source0);
     Geode *lightMarker = new Geode();
-    lightMarker->addDrawable(new ShapeDrawable(new Sphere(Vec3(400,400,400), 5)));
+    lightMarker->addDrawable(new ShapeDrawable(new Sphere(Vec3(0,0,0), 10)));
     lightMarker->getOrCreateStateSet()->setAttribute(material);
-    meshTransform->addChild(lightMarker);
-      
-    scene->addChild(meshTransform);
+    lightTransform->addChild(lightMarker);
+    
+    scene->addChild(meshTransform);  
+    scene->addChild(lightTransform);
     return scene;
 }
-
+void update(double time) {
+lightTransform->setPosition(Vec3(std::sin(time), std::cos(time),  std::sin(time)) * 400);
+}
 int main() {
     std::string stl_file_name = "./Darth_Vader_-_Full_Figure_-_LOW.stl";
     auto info = stl::parse_stl(stl_file_name);
@@ -121,6 +131,7 @@ int main() {
     viewer.setCameraManipulator(new osgGA::TrackballManipulator());
     viewer.realize();
     while (!viewer.done()) {
+        update(viewer.elapsedTime());
         viewer.frame();
     }
 }
